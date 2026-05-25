@@ -1,16 +1,14 @@
 from endstone import Player, ColorFormat
 from endstone.inventory import ItemStack
 from endstone.plugin import Plugin
-from typing import Any
 
 from jwcrate.api.models import Crate
 from jwcrate.crate.manager import CrateManager
+from jwcrate.messages import msg
 from jwcrate.utils.config_loader import load_yaml, save_yaml
 
 
 class EditMenu:
-    """Opens a chest for admin to place reward items. Saves full NBT on close."""
-
     def __init__(self, plugin: Plugin, crate: Crate, crate_manager: CrateManager):
         self.plugin = plugin
         self.crate = crate
@@ -23,19 +21,16 @@ class EditMenu:
         self.menu = Menu(MenuType.DOUBLE_CHEST, f"Edit: {self.crate.name}")
         self.menu.set_editable(True)
 
-        # Pre-fill with existing rewards
         rewards = list(self.crate.rewards.values())
         for i, reward in enumerate(rewards):
             if i >= 54:
                 break
-            item = self._reward_to_itemstack(reward)
-            self.menu.set_item(i, item)
+            self.menu.set_item(i, self._reward_item(reward))
 
-        self.menu.set_close_listener(self._on_close_handler)
+        self.menu.set_close_listener(self._on_close)
         self.menu.send_to(player)
 
-    def _on_close_handler(self, player: Player):
-        """Save all items in the menu as rewards to the crate config."""
+    def _on_close(self, player: Player):
         def do_save():
             try:
                 inv = self.menu.inventory
@@ -43,38 +38,28 @@ class EditMenu:
 
                 for i in range(54):
                     item = inv.get_item(i)
-                    if item is None:
-                        continue
-                    if "air" in item.type.id.lower():
+                    if item is None or "air" in item.type.id.lower():
                         continue
                     items_data.append(self._serialize_item(item, i))
 
                 if not items_data:
-                    player.send_message(f"{ColorFormat.YELLOW}No items found. Rewards not changed.")
+                    player.send_message(msg("edit_empty"))
                     return
 
-                # Save to config
-                self._save_rewards_to_config(items_data)
-                # Reload crate
+                self._save_rewards(items_data)
                 self.crate_manager.load_all()
-                player.send_message(
-                    f"{ColorFormat.GREEN}Saved {len(items_data)} reward(s) for '{self.crate.name}'! "
-                    f"Edit the config to adjust weights/rarity, then /jwcrate reload."
-                )
+                player.send_message(msg("edit_saved", count=len(items_data), crate=self.crate.name))
             except Exception as e:
-                player.send_message(f"{ColorFormat.RED}Error saving rewards: {e}")
+                player.send_message(msg("edit_error", error=str(e)))
                 self.plugin.logger.error(f"Error saving edit rewards: {e}")
 
         self.plugin.server.scheduler.run_task(self.plugin, do_save, delay=1)
 
-    def _reward_to_itemstack(self, reward) -> ItemStack:
-        """Convert a reward to an ItemStack for display."""
-        item_type = reward.preview.get("type", "minecraft:paper")
-        amount = reward.preview.get("amount", 1)
-        item = ItemStack(item_type, amount)
+    def _reward_item(self, reward) -> ItemStack:
+        item = ItemStack(reward.preview.get("type", "minecraft:paper"), reward.preview.get("amount", 1))
         meta = item.item_meta
         if reward.preview.get("name"):
-            meta.display_name = reward.preview.get("name")
+            meta.display_name = reward.preview["name"]
         if "lore" in reward.preview:
             meta.lore = reward.preview["lore"]
         if "enchantments" in reward.preview:
@@ -84,7 +69,6 @@ class EditMenu:
         return item
 
     def _serialize_item(self, item: ItemStack, index: int) -> dict:
-        """Serialize an ItemStack to a dict with full NBT data."""
         meta = item.item_meta
         data = {
             "type": item.type.id,
@@ -109,8 +93,7 @@ class EditMenu:
 
         return {"index": index, "item": data}
 
-    def _save_rewards_to_config(self, items_data: list):
-        """Write rewards to the crate YAML config file."""
+    def _save_rewards(self, items_data: list):
         crates_dir = self.crate_manager.data_folder / "crates"
         file = crates_dir / f"{self.crate.id}.yml"
         config = load_yaml(file)
@@ -120,14 +103,18 @@ class EditMenu:
         if "List" not in config["Rewards"]:
             config["Rewards"]["List"] = {}
 
-        # Clear existing rewards and rebuild from items
         new_rewards = {}
         for entry in items_data:
             item = entry["item"]
             idx = entry["index"]
             reward_id = f"reward_{idx}"
 
-            # Build preview data (same as item data for display)
+            # Resolve name: use display name if present, otherwise derive from type
+            if "name" in item:
+                reward_name = item["name"]
+            else:
+                reward_name = item["type"].replace("minecraft:", "").replace("_", " ").title()
+
             preview = {
                 "type": item["type"],
                 "amount": item.get("amount", 1),
@@ -139,7 +126,6 @@ class EditMenu:
             if "enchantments" in item:
                 preview["enchantments"] = item["enchantments"]
 
-            # Build items data for giving
             give_item = {
                 "type": item["type"],
                 "amount": item.get("amount", 1),
@@ -156,6 +142,7 @@ class EditMenu:
                 give_item["data"] = item["data"]
 
             new_rewards[reward_id] = {
+                "Name": reward_name,
                 "Type": "ITEM",
                 "Weight": 10.0,
                 "Rarity": "common",

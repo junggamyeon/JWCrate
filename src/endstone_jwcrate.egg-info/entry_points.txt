@@ -1,2 +1,0 @@
-[endstone]
-jwcrate = jwcrate.main:JWCrate

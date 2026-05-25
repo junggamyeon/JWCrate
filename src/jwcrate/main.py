@@ -7,12 +7,14 @@ from jwcrate.api.economy_handler import EconomyHandler
 from jwcrate.commands.crate_command import CommandHandler
 from jwcrate.listeners.crate_listener import CrateListener
 from jwcrate.hologram.manager import HologramManager
+from jwcrate.messages import load_messages
+
 
 class JWCrate(Plugin):
     prefix = "JWCrate"
     api_version = "0.6"
     load = "POSTWORLD"
-    
+
     commands = {
         "jwcrate": {
             "description": "Main command for JWCrate",
@@ -31,22 +33,10 @@ class JWCrate(Plugin):
     }
 
     permissions = {
-        "jwcrate.command.reload": {
-            "description": "Allows reloading crates config",
-            "default": "op"
-        },
-        "jwcrate.command.give": {
-            "description": "Allows giving physical crates",
-            "default": "op"
-        },
-        "jwcrate.command.key.give": {
-            "description": "Allows giving keys",
-            "default": "op"
-        },
-        "jwcrate.command.set": {
-            "description": "Allows setting crate blocks",
-            "default": "op"
-        },
+        "jwcrate.command.reload": {"description": "Allows reloading crates config", "default": "op"},
+        "jwcrate.command.give": {"description": "Allows giving physical crates", "default": "op"},
+        "jwcrate.command.key.give": {"description": "Allows giving keys", "default": "op"},
+        "jwcrate.command.set": {"description": "Allows setting crate blocks", "default": "op"},
         "jwcrate.admin": {
             "description": "Admin permissions for JWCrate",
             "default": "op",
@@ -60,32 +50,23 @@ class JWCrate(Plugin):
     }
 
     def on_enable(self) -> None:
-        self.logger.info("Initializing JWCrate...")
-        
+        load_messages(self.data_folder)
         self.db_manager = DatabaseManager(self.data_folder)
         self.crate_manager = CrateManager(self.data_folder, self.logger)
         self.crate_manager.load_all()
-        
         self.eco_handler = EconomyHandler(self.logger)
         self.hologram_manager = HologramManager(self, self.logger)
-        
         self.command_handler = CommandHandler(self, self.crate_manager, self.db_manager, self.eco_handler, self.hologram_manager)
-        
         self.listener = CrateListener(self, self.crate_manager, self.command_handler, self.hologram_manager)
         self.register_events(self.listener)
-        
-        # Spawn holograms for all existing crate locations after a short delay
-        # (to ensure dimensions are loaded)
         self.server.scheduler.run_task(self, self._spawn_holograms, delay=40)
-        
-        self.logger.info("JWCrate enabled successfully!")
+        self.logger.info("JWCrate enabled.")
 
     def _spawn_holograms(self):
         self.hologram_manager.spawn_all_holograms(self.crate_manager.crates)
 
     def on_disable(self) -> None:
         self.hologram_manager.remove_all_holograms()
-        self.logger.info("JWCrate disabled.")
 
     def on_command(self, sender: CommandSender, command: Command, args: list[str]) -> bool:
         if command.name == "jwcrate":

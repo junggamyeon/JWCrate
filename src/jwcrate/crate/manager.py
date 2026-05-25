@@ -1,11 +1,28 @@
-import os
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, Optional
+
 from endstone import Logger
-from endstone import Player
 
 from jwcrate.api.models import Crate, CrateKey, Reward, CrateCost
 from jwcrate.utils.config_loader import load_yaml, save_yaml
+
+
+def _resolve_reward_name(rid: str, rdata: dict) -> str:
+    # Use explicit Name field if present
+    if rdata.get("Name"):
+        return rdata["Name"]
+    # Use preview display name if present
+    preview = rdata.get("PreviewData", {})
+    if preview.get("name"):
+        return preview["name"]
+    # Fallback: clean up the item type id
+    item_type = preview.get("type", "")
+    if item_type:
+        # "minecraft:diamond_sword" -> "Diamond Sword"
+        name = item_type.replace("minecraft:", "").replace("_", " ").title()
+        return name
+    return rid
+
 
 class CrateManager:
     def __init__(self, data_folder: Path, logger: Logger):
@@ -23,16 +40,12 @@ class CrateManager:
     def _load_keys(self):
         keys_dir = self.data_folder / "keys"
         keys_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Create default key if empty
+
         if not any(keys_dir.iterdir()):
             default_key = {
                 "Name": "Default Key",
                 "Virtual": False,
-                "ItemData": {
-                    "type": "minecraft:tripwire_hook",
-                    "name": "Default Key"
-                }
+                "ItemData": {"type": "minecraft:tripwire_hook", "name": "Default Key"}
             }
             save_yaml(keys_dir / "default.yml", default_key)
 
@@ -60,7 +73,7 @@ class CrateManager:
             try:
                 data = load_yaml(file)
                 crate_id = file.stem
-                
+
                 costs = {}
                 for cid, cdata in data.get("CostOptions", {}).items():
                     costs[cid] = CrateCost(
@@ -68,8 +81,8 @@ class CrateManager:
                         required=cdata.get("required", True),
                         name=cdata.get("name", "Cost"),
                         cost_type=cdata.get("type", "key"),
-                        currency_id=cdata.get("currency_id", None),
-                        key_id=cdata.get("key_id", None),
+                        currency_id=cdata.get("currency_id"),
+                        key_id=cdata.get("key_id"),
                         amount=cdata.get("amount", 1.0)
                     )
 
@@ -77,6 +90,7 @@ class CrateManager:
                 for rid, rdata in data.get("Rewards", {}).get("List", {}).items():
                     rewards[rid] = Reward(
                         id=rid,
+                        name=_resolve_reward_name(rid, rdata),
                         type=rdata.get("Type", "ITEM"),
                         weight=rdata.get("Weight", 10.0),
                         rarity=rdata.get("Rarity", "common"),
@@ -109,7 +123,7 @@ class CrateManager:
         default_crate = {
             "Name": "Default Crate",
             "Description": ["A default crate"],
-            "Hologram": "§6§lDefault Crate\n§7Right-click to open",
+            "Hologram": "\u00a76\u00a7lDefault Crate\n\u00a77Right-click to open",
             "HologramHeight": 1.5,
             "ItemProvider": {"type": "minecraft:chest", "name": "Default Crate"},
             "Preview": {"Enabled": True},
@@ -128,6 +142,7 @@ class CrateManager:
             "Rewards": {
                 "List": {
                     "diamond": {
+                        "Name": "Diamond",
                         "Type": "ITEM",
                         "Weight": 50.0,
                         "Rarity": "rare",
@@ -135,6 +150,7 @@ class CrateManager:
                         "ItemsData": [{"type": "minecraft:diamond", "amount": 1}]
                     },
                     "coins": {
+                        "Name": "100 Coins",
                         "Type": "COMMAND",
                         "Weight": 50.0,
                         "Rarity": "common",
@@ -151,7 +167,7 @@ class CrateManager:
 
     def get_key(self, key_id: str) -> Optional[CrateKey]:
         return self.keys.get(key_id.lower())
-        
+
     def get_crate_by_location(self, x: float, y: float, z: float, dim: str) -> Optional[Crate]:
         for crate in self.crates.values():
             for loc in crate.locations:
