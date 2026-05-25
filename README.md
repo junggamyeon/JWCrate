@@ -135,22 +135,3 @@ Rewards display proper names in win/broadcast messages. Priority:
 ### ITEM
 Gives physical items to the player. Supports custom name, lore, enchantments, unbreakable flag.
 
-### COMMAND
-Executes server commands. Supports `%player%` placeholder (and JWPlaceholderAPI if installed).
-
-## Installation
-
-Place both wheels in your server's `plugins/` directory:
-
-```
-endstone_jwinventoryapi-2.0.0-py2.py3-none-any.whl
-endstone_jwcrate-1.0.0-py3-none-any.whl
-```
-
-## Dependencies
-
-- endstone
-- JWInventoryAPI (required)
-- JWEconomy (optional, for economy costs)
-- JWPlaceholderAPI (optional, for command placeholders)
-- PyYAML
