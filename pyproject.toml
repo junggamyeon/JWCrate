@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "endstone_jwcrate"
+version = "1.0.0"
+authors = [
+  { name="JWDev" },
+]
+description = "ExcellentCrates clone for Endstone"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "PyYAML",
+    "mcbe-binarystream >= 1.1.0"
+]
+
+[project.entry-points."endstone"]
+jwcrate = "jwcrate.main:JWCrate"
